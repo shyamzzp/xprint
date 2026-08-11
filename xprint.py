@@ -43,6 +43,8 @@ def parse_args(argv):
     size, font, files = DEFAULT_SIZE, DEFAULT_FONT, []
     native, nfont, scale = True, "b", 1      # DEFAULT: native ESC/POS text, small Font B
     header = True
+    each = False                             # each Enter prints its line immediately
+    feed = 3                                 # blank lines fed after each print
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -60,9 +62,13 @@ def parse_args(argv):
             scale = int(argv[i + 1]); i += 2
         elif a == "--no-header":
             header = False; i += 1
+        elif a in ("-e", "--each"):          # line-at-a-time: Enter prints immediately
+            each = True; i += 1
+        elif a == "--feed":                  # blank lines fed after each print
+            feed = int(argv[i + 1]); i += 2
         else:
             files.append(a); i += 1
-    return size, font, files, native, nfont, scale, header
+    return size, font, files, native, nfont, scale, header, each, feed
 
 
 def read_input(files):
@@ -173,7 +179,7 @@ def do_print(p, body, cfg, show_header=True):
             body += "\n"
         img = render(body, cfg["size"], cfg["font"], header=header)
         p.image(img, impl="bitImageRaster")  # single contiguous raster stream
-    p.text("\n\n\n")   # feed so last line clears the head + leaves a gap; no cut
+    p.text("\n" * cfg.get("feed", 3))   # feed so last line clears the head; :feed N to tune
 
 
 HELP = """\
@@ -186,6 +192,7 @@ Commands (start with ':'):
   :font NAME         raster font (courier/typewriter/menlo/monaco/path)
   :size N            raster point size
   :header on|off     date + weekday line at top (default on)
+  :feed N            blank lines fed after each print (default 3)
   :status            show current settings
   :help              this help
   :quit / Ctrl-D     exit"""
@@ -224,6 +231,8 @@ def do_command(line, cfg):
         cfg["size"] = int(arg)
     elif cmd == "header" and arg:
         cfg["header"] = arg.lower() in ("on", "true", "1", "yes")
+    elif cmd == "feed" and arg:
+        cfg["feed"] = int(arg)
     else:
         print(f"? unknown command ':{cmd}' (:help)")
         return True
@@ -259,15 +268,40 @@ def interactive(p, cfg):
         print(f"printed {len(buf)} line(s)")
 
 
+def each_line(p, cfg):
+    """Line-at-a-time: every Enter prints that line immediately."""
+    print("xprint each-line. Type text, Enter prints it. :help for commands, Ctrl-D quits.")
+    print(status(cfg))
+    first = [True]                          # header only on the session's first print
+    while True:
+        try:
+            line = input("xprint> ")
+        except EOFError:
+            print()
+            break
+        if line.startswith(":"):
+            if not do_command(line, cfg):
+                break
+            continue
+        if line == "":                      # blank Enter = paper feed only
+            p.text("\n")
+            continue
+        do_print(p, line, cfg, show_header=first[0])
+        first[0] = False
+
+
 def main():
-    size, font, files, native, nfont, scale, header = parse_args(sys.argv[1:])
+    size, font, files, native, nfont, scale, header, each, feed = parse_args(sys.argv[1:])
     cfg = {"size": size, "font": font, "native": native,
-           "nfont": nfont, "scale": scale, "header": header}
+           "nfont": nfont, "scale": scale, "header": header, "feed": feed}
     p = open_printer()
 
     # Interactive when no files and stdin is a terminal; else one-shot.
     if not files and sys.stdin.isatty():
-        interactive(p, cfg)
+        if each:
+            each_line(p, cfg)
+        else:
+            interactive(p, cfg)
     else:
         do_print(p, read_input(files), cfg)
 
