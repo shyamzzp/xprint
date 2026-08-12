@@ -16,8 +16,10 @@ Usage:
     xprint -t                              # TELETYPE: prints each line live as it fills
     xprint                                 # INTERACTIVE: paste text, blank line prints
 """
+import os
 import sys
 import datetime
+import subprocess
 from escpos.printer import Usb
 from PIL import Image, ImageDraw, ImageFont
 
@@ -201,6 +203,49 @@ def retract(p, n):
     p._raw(b"\x1b\x65" + bytes([n]))
 
 
+def self_update():
+    """Pull the latest xprint into this checkout and refresh its deps.
+
+    Same effect as re-running the curl installer, but from inside the tool:
+    fetch + hard-reset to origin/main, then reinstall requirements into the
+    venv. The running process keeps the old code, so restart xprint after.
+    """
+    here = os.path.dirname(os.path.realpath(__file__))
+    if not os.path.isdir(os.path.join(here, ".git")):
+        print("not a git checkout, can't self-update. "
+              "Reinstall with the curl one-liner from the README.")
+        return
+
+    def rev():
+        r = subprocess.run(["git", "-C", here, "rev-parse", "--short", "HEAD"],
+                           capture_output=True, text=True)
+        return r.stdout.strip()
+
+    def sh(*cmd):
+        print("  $", " ".join(cmd))
+        subprocess.run(cmd, check=True)
+
+    print(f"updating xprint in {here}")
+    try:
+        old = rev()
+        sh("git", "-C", here, "fetch", "--depth", "1", "origin", "main")
+        sh("git", "-C", here, "reset", "--hard", "origin/main")
+        sh("git", "-C", here, "clean", "-fd")
+        new = rev()
+        venv_py = os.path.join(here, ".venv", "bin", "python")
+        py = venv_py if os.path.exists(venv_py) else sys.executable
+        sh(py, "-m", "pip", "install", "-q", "-r",
+           os.path.join(here, "requirements.txt"))
+    except subprocess.CalledProcessError as e:
+        print(f"update failed: {e}")
+        return
+
+    if old == new:
+        print(f"already up to date ({new}).")
+    else:
+        print(f"updated {old} -> {new}. Restart xprint to load the new version.")
+
+
 HELP = """\
 Interactive xprint. Paste/type text; a BLANK line prints the buffer.
 Commands (start with ':'):
@@ -213,6 +258,7 @@ Commands (start with ':'):
   :header on|off     date + weekday line at top (default on)
   :feed N            blank lines fed after each print (default 3)
   :retract N         reverse-feed N lines: pull paper back in (undo a feed)
+  :update / :upgrade update xprint to the latest version (git pull + deps)
   :status            show current settings
   :help              this help
   :quit / Ctrl-D     exit"""
@@ -237,6 +283,9 @@ def do_command(line, cfg, p=None):
         if p is not None:
             retract(p, int(arg))
         print(f"retracted {arg} line(s)")
+        return True
+    elif cmd in ("update", "upgrade"):     # self-update to latest, no curl needed
+        self_update()
         return True
     elif cmd == "help":
         print(HELP)

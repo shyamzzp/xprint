@@ -149,9 +149,33 @@ Live commands (type at the prompt):
 | `:header on|off` | toggle the date/weekday header                    |
 | `:feed N`        | blank lines fed after each print                  |
 | `:retract N`     | reverse-feed N lines: pull paper back in          |
+| `:update` / `:upgrade` | update xprint to the latest version (git pull + deps) |
 | `:status`        | show current settings                             |
 | `:help`          | command list                                      |
 | `:quit`          | exit (Ctrl-D also works)                          |
+
+## Updating
+
+From inside an interactive session, just type:
+
+```
+:update      (or :upgrade)
+```
+
+It pulls the latest code into your checkout (fetch + hard-reset to `origin/main`)
+and reinstalls the Python deps, no `curl` needed. The running process keeps the
+old code, so **restart `xprint`** afterwards to use the new version.
+
+Equivalent from the shell (re-runs the installer, also works to update):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/shyamzzp/xprint/main/install.sh | bash
+```
+
+Note: the checkout at `~/.local/share/xprint` is managed. `:update` (and the
+installer) hard-reset it to `origin/main`, so any local edits you make there,
+e.g. custom `FONTS` or USB IDs, are overwritten on update. Keep a copy if you
+customize.
 
 ## Configuring for your printer
 
