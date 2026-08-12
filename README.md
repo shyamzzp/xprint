@@ -51,6 +51,11 @@ echo "it works" | xprint
 - If you see `xprint: command not found`, the symlink dir isn't on your `PATH`; the installer prints the exact `export PATH=...` line to fix it.
 - Env overrides: `XPRINT_DIR` (install location, default `~/.local/share/xprint`), `XPRINT_BIN` (symlink dir).
 
+**Can't recall the command?** The install URL is derivable from the repo name:
+`shyamzzp.github.io/xprint/install.sh`. Or open the repo at
+[github.com/shyamzzp/xprint](https://github.com/shyamzzp/xprint), the command is
+the first line here. Or from a shell: `gh search repos --owner shyamzzp printer`.
+
 > The install URL is served by **GitHub Pages** (`username.github.io/repo/install.sh`),
 > easy to recall from the repo name and refreshed on every push. Two equivalents
 > if you ever need them:
