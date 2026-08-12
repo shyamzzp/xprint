@@ -88,6 +88,7 @@ ln -sf "$(pwd)/xprint.py" /opt/homebrew/bin/xprint   # or any dir on PATH
 | `--retract N`, `--reverse N` | Reverse-feed N lines (most clones ignore it; no reverse motor). |
 | `-e`, `--each` | Each-line mode (Enter prints the line). |
 | `-t`, `--stream`, `--teletype` | Teletype mode. |
+| `-h`, `--help` | Print usage + all commands, then exit. |
 
 ## Usage
 

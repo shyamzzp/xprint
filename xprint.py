@@ -435,6 +435,11 @@ def stream_mode(p, cfg):
 
 
 def main():
+    if any(a in ("-h", "--help") for a in sys.argv[1:]):
+        print(__doc__)
+        print(HELP)
+        return
+
     size, font, files, native, nfont, scale, header, each, feed, retract_n, stream = parse_args(sys.argv[1:])
     cfg = {"size": size, "font": font, "native": native,
            "nfont": nfont, "scale": scale, "header": header, "feed": feed}
