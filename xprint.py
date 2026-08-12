@@ -12,6 +12,7 @@ Usage:
     echo "hi" | xprint -r                  # raster, Courier size 24
     echo "hi" | xprint -r -s 28 -f menlo   # raster, custom size/font
     xprint file.txt                        # print a file
+    xprint --retract 3                     # reverse-feed 3 lines: pull paper back in
     xprint                                 # INTERACTIVE: paste text, blank line prints
 """
 import sys
@@ -45,6 +46,7 @@ def parse_args(argv):
     header = True
     each = False                             # each Enter prints its line immediately
     feed = 3                                 # blank lines fed after each print
+    retract_n = 0                            # >0: reverse-feed N lines then exit
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -66,9 +68,11 @@ def parse_args(argv):
             each = True; i += 1
         elif a == "--feed":                  # blank lines fed after each print
             feed = int(argv[i + 1]); i += 2
+        elif a in ("--retract", "--reverse"):  # reverse-feed N lines, then exit
+            retract_n = int(argv[i + 1]); i += 2
         else:
             files.append(a); i += 1
-    return size, font, files, native, nfont, scale, header, each, feed
+    return size, font, files, native, nfont, scale, header, each, feed, retract_n
 
 
 def read_input(files):
@@ -182,6 +186,17 @@ def do_print(p, body, cfg, show_header=True):
     p.text("\n" * cfg.get("feed", 3))   # feed so last line clears the head; :feed N to tune
 
 
+def retract(p, n):
+    """Reverse-feed n lines: pull paper back into the printer (undo a feed).
+
+    Sends ESC/POS 'ESC e n' (print and reverse feed n lines). Many cheap
+    Xprinter 58mm clones lack a reverse-feed motor and silently ignore this;
+    if the paper does not move, your unit is one of those.
+    """
+    n = max(0, min(n, 255))
+    p._raw(b"\x1b\x65" + bytes([n]))
+
+
 HELP = """\
 Interactive xprint. Paste/type text; a BLANK line prints the buffer.
 Commands (start with ':'):
@@ -193,6 +208,7 @@ Commands (start with ':'):
   :size N            raster point size
   :header on|off     date + weekday line at top (default on)
   :feed N            blank lines fed after each print (default 3)
+  :retract N         reverse-feed N lines: pull paper back in (undo a feed)
   :status            show current settings
   :help              this help
   :quit / Ctrl-D     exit"""
@@ -205,7 +221,7 @@ def status(cfg):
     return f"[raster] font={cfg['font']} size={cfg['size']} {hdr}"
 
 
-def do_command(line, cfg):
+def do_command(line, cfg, p=None):
     """Handle a ':' command. Return False to quit, True to continue."""
     parts = line[1:].split()
     if not parts:
@@ -213,6 +229,11 @@ def do_command(line, cfg):
     cmd, arg = parts[0], (parts[1] if len(parts) > 1 else None)
     if cmd in ("quit", "q", "exit"):
         return False
+    elif cmd == "retract" and arg:         # reverse-feed: pull paper back in
+        if p is not None:
+            retract(p, int(arg))
+        print(f"retracted {arg} line(s)")
+        return True
     elif cmd == "help":
         print(HELP)
     elif cmd == "status":
@@ -252,7 +273,7 @@ def interactive(p, cfg):
             print()
             break
         if line.startswith(":"):
-            if not do_command(line, cfg):
+            if not do_command(line, cfg, p):
                 break
             continue
         if line == "":                      # blank line = print buffer
@@ -280,7 +301,7 @@ def each_line(p, cfg):
             print()
             break
         if line.startswith(":"):
-            if not do_command(line, cfg):
+            if not do_command(line, cfg, p):
                 break
             continue
         if line == "":                      # blank Enter = paper feed only
@@ -291,10 +312,14 @@ def each_line(p, cfg):
 
 
 def main():
-    size, font, files, native, nfont, scale, header, each, feed = parse_args(sys.argv[1:])
+    size, font, files, native, nfont, scale, header, each, feed, retract_n = parse_args(sys.argv[1:])
     cfg = {"size": size, "font": font, "native": native,
            "nfont": nfont, "scale": scale, "header": header, "feed": feed}
     p = open_printer()
+
+    if retract_n > 0:                      # undo a feed: pull paper back, then exit
+        retract(p, retract_n)
+        return
 
     # Interactive when no files and stdin is a terminal; else one-shot.
     if not files and sys.stdin.isatty():

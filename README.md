@@ -57,6 +57,7 @@ xprint notes.txt                     # print a file
 echo "big" | xprint --nfont a        # native big built-in font
 echo "2x"  | xprint --scale 2        # native double size
 echo "hi"  | xprint --no-header      # skip the date/weekday header
+xprint --retract 3                   # reverse-feed 3 lines: pull paper back in (undo a feed)
 
 # raster mode (custom fonts / sizes)
 echo "hi"  | xprint -r                       # Courier, size 24
@@ -86,6 +87,8 @@ Live commands (type at the prompt):
 | `:font NAME`     | raster font (`courier`/`typewriter`/`menlo`/`monaco`/path) |
 | `:size N`        | raster point size                                 |
 | `:header on|off` | toggle the date/weekday header                    |
+| `:feed N`        | blank lines fed after each print                  |
+| `:retract N`     | reverse-feed N lines: pull paper back in          |
 | `:status`        | show current settings                             |
 | `:help`          | command list                                      |
 | `:quit`          | exit (Ctrl-D also works)                          |
@@ -122,6 +125,7 @@ Then update `VENDOR`, `PRODUCT`, `IFACE`, `OUT_EP`, `IN_EP`. On non-macOS, also 
 
 - **Thermal paper fades.** No ink, just heat-sensitive dye. Heat, sunlight, PVC sleeves, and oils erase it (weeks to months). Scan or photograph anything you need to keep.
 - No paper cut is issued (these units usually have no auto-cutter); a few blank lines are fed so the last line clears the print head.
+- **Reverse feed (`--retract N` / `:retract N`)** sends ESC/POS `ESC e n` to pull paper back into the printer. Many cheap Xprinter 58mm clones have no reverse-feed motor and silently ignore it; if the paper does not move, your unit is one of those.
 - If you hit `USBError: Access denied` / `Pipe error`, another process holds the device (e.g. a running interactive session) or it stalled — close other users and/or reset it: `python -c "import usb.core; usb.core.find(idVendor=0x0483, idProduct=0x070b).reset()"`.
 
 ## License
