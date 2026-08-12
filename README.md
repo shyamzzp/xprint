@@ -32,7 +32,8 @@ python3, libusb), validates them, clones the repo, builds a venv, and puts an
 safe to re-run to update.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/shyamzzp/xprint/main/install.sh | bash
+curl -fsSL -H "Accept: application/vnd.github.raw" \
+  https://api.github.com/repos/shyamzzp/xprint/contents/install.sh?ref=main | bash
 ```
 
 Then smoke test:
@@ -44,6 +45,11 @@ echo "it works" | xprint
 - **macOS** needs [Homebrew](https://brew.sh) first (the installer stops with the link if it's missing).
 - If you see `xprint: command not found`, the symlink dir isn't on your `PATH`; the installer prints the exact `export PATH=...` line to fix it.
 - Env overrides: `XPRINT_DIR` (install location, default `~/.local/share/xprint`), `XPRINT_BIN` (symlink dir).
+
+> The install command uses the GitHub **API** URL on purpose: it always serves
+> the current `install.sh`. The plain `raw.githubusercontent.com/.../install.sh`
+> URL also works but is CDN-cached for a few minutes after each push, so a fresh
+> change may not show up immediately.
 
 <details>
 <summary>Manual install (no installer script)</summary>
@@ -170,7 +176,8 @@ old code, so **restart `xprint`** afterwards to use the new version.
 Equivalent from the shell (re-runs the installer, also works to update):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/shyamzzp/xprint/main/install.sh | bash
+curl -fsSL -H "Accept: application/vnd.github.raw" \
+  https://api.github.com/repos/shyamzzp/xprint/contents/install.sh?ref=main | bash
 ```
 
 Note: the checkout at `~/.local/share/xprint` is managed. `:update` (and the
