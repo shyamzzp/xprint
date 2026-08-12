@@ -11,6 +11,9 @@ macOS has no working driver for these no-name thermal printers: raw CUPS queues 
   - **Raster** (`-r`): text rendered to a bitmap with any TrueType font at any size. More flexible, lighter/softer than native.
 - **Date + weekday header** on each print: date left (`10th Aug, 2026`), weekday right (`Monday`), in a smaller font.
 - **Interactive session**: run `xprint` with no args, paste text, blank line prints. Header prints once at the top of the session.
+- **Teletype / stream** (`-t`): prints each line live the moment your typing fills the paper width, word-wrapped, like an old teletype.
+- **Each-line** (`-e`): every Enter prints that one line immediately.
+- **Reverse feed** (`--retract N`): try to pull paper back into the printer (hardware permitting).
 - **Auto-wrap** of long lines, descender-safe line height, and a chunked USB writer that works around this clone's tiny buffer (single big write → USB pipe error; multiple raster commands → gibberish).
 
 ## Requirements
@@ -23,30 +26,68 @@ macOS has no working driver for these no-name thermal printers: raw CUPS queues 
 
 ## Install
 
+One command on a fresh macOS or Linux machine. It installs prerequisites (git,
+python3, libusb), validates them, clones the repo, builds a venv, and puts an
+`xprint` command on your `PATH`. Shows live `[n/7]` step progress. Idempotent:
+safe to re-run to update.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/shyamzzp/xprint/main/install.sh | bash
+```
+
+Then smoke test:
+
+```bash
+echo "it works" | xprint
+```
+
+- **macOS** needs [Homebrew](https://brew.sh) first (the installer stops with the link if it's missing).
+- If you see `xprint: command not found`, the symlink dir isn't on your `PATH`; the installer prints the exact `export PATH=...` line to fix it.
+- Env overrides: `XPRINT_DIR` (install location, default `~/.local/share/xprint`), `XPRINT_BIN` (symlink dir).
+
+<details>
+<summary>Manual install (no installer script)</summary>
+
 ```bash
 git clone https://github.com/shyamzzp/xprint.git
 cd xprint
-
-# isolated venv (recommended)
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-
-# run
 echo "hello" | .venv/bin/python xprint.py
+# optional global command:
+ln -sf "$(pwd)/xprint.py" /opt/homebrew/bin/xprint   # or any dir on PATH
 ```
+</details>
 
-### Make it a global `xprint` command
+## Command reference
 
-Point the script's shebang at your venv's Python (or install the deps globally), then symlink it onto your `PATH`:
+### Modes: how you feed text
 
-```bash
-# option A: keep the venv, hard-code its interpreter in the shebang
-sed -i '' "1s|.*|#!$(pwd)/.venv/bin/python3|" xprint.py   # macOS
-chmod +x xprint.py
-ln -sf "$(pwd)/xprint.py" /opt/homebrew/bin/xprint         # or any dir on PATH
-```
+| Command | Description |
+|---------|-------------|
+| `echo "text" \| xprint` | Print piped text (one-shot). |
+| `xprint file.txt` | Print a file. |
+| `xprint` | Interactive: paste/type, a blank-line Enter prints the buffer. |
+| `xprint -e` | Each-line: every Enter prints that line immediately. |
+| `xprint -t` | Teletype: prints each line live as your typing fills the paper width. |
+| `xprint --retract N` | Reverse-feed N lines, then exit (pull paper back in). |
 
-Now `xprint` works from anywhere.
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--nfont b` | Native small built-in font (**default**, ~42 chars/line). |
+| `--nfont a` | Native big built-in font (~32 chars/line). |
+| `--scale N` | Native size multiplier, 1–8. |
+| `-r`, `--raster` | Raster mode: bitmap render with any TrueType font. |
+| `-f NAME`, `--font NAME` | Raster font: preset (`courier`/`courier-reg`/`menlo`/`monaco`/`typewriter`) or a `.ttf`/`.otf` path. |
+| `-s N`, `--size N` | Raster point size (default 24). |
+| `-n`, `--native` | Force native mode (default). |
+| `--no-header` | Skip the date + weekday header. |
+| `--feed N` | Blank lines fed after each print (default 3). |
+| `--retract N`, `--reverse N` | Reverse-feed N lines (most clones ignore it; no reverse motor). |
+| `-e`, `--each` | Each-line mode (Enter prints the line). |
+| `-t`, `--stream`, `--teletype` | Teletype mode. |
 
 ## Usage
 
@@ -145,8 +186,12 @@ Then update `VENDOR`, `PRODUCT`, `IFACE`, `OUT_EP`, `IN_EP`. On non-macOS, also 
 - **Thermal paper fades.** No ink, just heat-sensitive dye. Heat, sunlight, PVC sleeves, and oils erase it (weeks to months). Scan or photograph anything you need to keep.
 - No paper cut is issued (these units usually have no auto-cutter); a few blank lines are fed so the last line clears the print head.
 - **Reverse feed (`--retract N` / `:retract N`)** sends ESC/POS `ESC e n` to pull paper back into the printer. Many cheap Xprinter 58mm clones have no reverse-feed motor and silently ignore it; if the paper does not move, your unit is one of those.
-- If you hit `USBError: Access denied` / `Pipe error`, another process holds the device (e.g. a running interactive session) or it stalled — close other users and/or reset it: `python -c "import usb.core; usb.core.find(idVendor=0x0483, idProduct=0x070b).reset()"`.
+- **`USB device not found` / `Device (1155, 1803) not found`**: printer is off or unplugged. Power it and connect USB, then retry.
+- **`USBError: Access denied` / `Pipe error`**: another process holds the device (e.g. a running interactive session) or it stalled. Close other users and/or reset it:
+  ```bash
+  ~/.local/share/xprint/.venv/bin/python -c "import usb.core; usb.core.find(idVendor=0x0483, idProduct=0x070b).reset()"
+  ```
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).
