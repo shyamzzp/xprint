@@ -46,7 +46,7 @@ install_prereqs_mac() {
   # libusb has no CLI; check via brew list
   brew list libusb >/dev/null 2>&1 || need+=(libusb)
   if [ "${#need[@]}" -gt 0 ]; then
-    say "missing: ${need[*]} — installing via brew (live output below)"
+    say "missing: ${need[*]}, installing via brew (live output below)"
     run brew install "${need[@]}"
   else
     ok "all brew prereqs already present (git, python, libusb)"
@@ -93,7 +93,7 @@ fi
 # ---- fetch / update repo ---------------------------------------------------
 step "Fetching xprint source"
 if [ -d "$INSTALL_DIR/.git" ]; then
-  say "existing checkout found — syncing to latest: $INSTALL_DIR"
+  say "existing checkout found, syncing to latest: $INSTALL_DIR"
   # Managed checkout, not for hand edits. Force it to match origin/main so an
   # older installer's local tweaks can't block the update with a merge abort.
   run git -C "$INSTALL_DIR" fetch --depth 1 origin main
@@ -146,12 +146,18 @@ run ln -sf "$LAUNCHER" "$BINDIR/xprint"
 ok "symlinked $BINDIR/xprint -> $LAUNCHER"
 
 # ---- final validation ------------------------------------------------------
-step "Done — final check"
+step "Done - final check"
 if have xprint; then
   ok "xprint on PATH: $(command -v xprint)"
 else
   warn "$BINDIR not on PATH. Add it:"
   warn "  echo 'export PATH=\"$BINDIR:\$PATH\"' >> ~/.zshrc && source ~/.zshrc"
 fi
-printf '\n  try:  echo "hello" | xprint\n\n'
+
+# show the full command list so the user knows how to use it
+printf '\n\033[1m--- xprint commands ---\033[0m\n'
+"$LAUNCHER" --help || true
+
+printf '\n\033[1;32mReady.\033[0m  try:  echo "hello" | xprint\n'
+echo "See the command list above, or run 'xprint --help' any time."
 echo "note: set your printer USB IDs at the top of $INSTALL_DIR/xprint.py if it is not the default clone."
