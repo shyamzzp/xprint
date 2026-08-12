@@ -14,20 +14,26 @@ set -euo pipefail
 REPO="https://github.com/shyamzzp/xprint.git"
 INSTALL_DIR="${XPRINT_DIR:-$HOME/.local/share/xprint}"
 
-say()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
+STEP=0
+STEP_TOTAL=7
+step() { STEP=$((STEP+1)); printf '\n\033[1;36m[%d/%d]\033[0m \033[1m%s\033[0m\n' "$STEP" "$STEP_TOTAL" "$*"; }
+say()  { printf '\033[1;36m  ->\033[0m %s\n' "$*"; }
 ok()   { printf '\033[1;32m  ok\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m  ! \033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31mERR\033[0m %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
+# run: echo the command dimmed, then execute it with output streaming through
+run()  { printf '\033[2m    $ %s\033[0m\n' "$*"; "$@"; }
 
 # ---- detect platform -------------------------------------------------------
+step "Detecting platform"
 OS="$(uname -s)"
 case "$OS" in
   Darwin) PLATFORM=mac ;;
   Linux)  PLATFORM=linux ;;
   *) die "unsupported OS: $OS (mac/linux only)" ;;
 esac
-say "platform: $PLATFORM"
+ok "$PLATFORM ($(uname -m))"
 
 # ---- install prerequisites -------------------------------------------------
 install_prereqs_mac() {
@@ -40,10 +46,10 @@ install_prereqs_mac() {
   # libusb has no CLI; check via brew list
   brew list libusb >/dev/null 2>&1 || need+=(libusb)
   if [ "${#need[@]}" -gt 0 ]; then
-    say "brew install: ${need[*]}"
-    brew install "${need[@]}"
+    say "missing: ${need[*]} — installing via brew (live output below)"
+    run brew install "${need[@]}"
   else
-    ok "brew prereqs already present"
+    ok "all brew prereqs already present (git, python, libusb)"
   fi
 }
 
@@ -51,25 +57,25 @@ install_prereqs_linux() {
   local SUDO=""
   [ "$(id -u)" -ne 0 ] && SUDO="sudo"
   if have apt-get; then
-    say "apt-get install prerequisites"
-    $SUDO apt-get update -qq
-    $SUDO apt-get install -y python3 python3-venv python3-pip git libusb-1.0-0
+    say "pkg manager: apt (live output below)"
+    run $SUDO apt-get update
+    run $SUDO apt-get install -y python3 python3-venv python3-pip git libusb-1.0-0
   elif have dnf; then
-    say "dnf install prerequisites"
-    $SUDO dnf install -y python3 python3-pip git libusbx
+    say "pkg manager: dnf (live output below)"
+    run $SUDO dnf install -y python3 python3-pip git libusbx
   elif have pacman; then
-    say "pacman install prerequisites"
-    $SUDO pacman -Sy --noconfirm python git libusb
+    say "pkg manager: pacman (live output below)"
+    run $SUDO pacman -Sy --noconfirm python git libusb
   else
     die "no supported package manager (apt/dnf/pacman). Install python3, git, libusb manually."
   fi
 }
 
-say "installing prerequisites"
+step "Installing prerequisites"
 if [ "$PLATFORM" = mac ]; then install_prereqs_mac; else install_prereqs_linux; fi
 
 # ---- validate prerequisites ------------------------------------------------
-say "validating prerequisites"
+step "Validating prerequisites"
 have git     || die "git missing after install"
 have python3 || die "python3 missing after install"
 PYV="$(python3 -c 'import sys;print("%d.%d"%sys.version_info[:2])')"
@@ -85,28 +91,31 @@ else
 fi
 
 # ---- fetch / update repo ---------------------------------------------------
+step "Fetching xprint source"
 if [ -d "$INSTALL_DIR/.git" ]; then
-  say "updating existing checkout: $INSTALL_DIR"
-  git -C "$INSTALL_DIR" pull --ff-only
+  say "existing checkout found — updating: $INSTALL_DIR"
+  run git -C "$INSTALL_DIR" pull --ff-only
 else
-  say "cloning into: $INSTALL_DIR"
+  say "cloning $REPO"
+  say "  -> $INSTALL_DIR"
   mkdir -p "$(dirname "$INSTALL_DIR")"
-  git clone --depth 1 "$REPO" "$INSTALL_DIR"
+  run git clone --depth 1 --progress "$REPO" "$INSTALL_DIR"
 fi
 
 # ---- venv + python deps ----------------------------------------------------
-say "creating venv + installing python deps"
-python3 -m venv "$INSTALL_DIR/.venv"
-"$INSTALL_DIR/.venv/bin/pip" install --quiet --upgrade pip
-"$INSTALL_DIR/.venv/bin/pip" install --quiet -r "$INSTALL_DIR/requirements.txt"
-ok "python deps installed"
-
-# validate the deps import
-"$INSTALL_DIR/.venv/bin/python" -c 'import escpos, usb, PIL' \
+step "Creating venv + installing python deps"
+say "python venv: $INSTALL_DIR/.venv"
+run python3 -m venv "$INSTALL_DIR/.venv"
+run "$INSTALL_DIR/.venv/bin/pip" install --upgrade pip
+say "installing: $(tr '\n' ' ' < "$INSTALL_DIR/requirements.txt")"
+run "$INSTALL_DIR/.venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt"
+say "verifying deps import"
+run "$INSTALL_DIR/.venv/bin/python" -c 'import escpos, usb, PIL; print("escpos, pyusb, Pillow OK")' \
   || die "python deps failed to import"
-ok "deps import cleanly"
+ok "deps installed + import cleanly"
 
 # ---- pin shebang at the venv interpreter -----------------------------------
+step "Wiring up the global command"
 say "pinning shebang to venv interpreter"
 python3 - "$INSTALL_DIR/xprint.py" "$INSTALL_DIR/.venv/bin/python3" <<'PY'
 import sys
@@ -127,11 +136,11 @@ pick_bindir() {
 }
 BINDIR="$(pick_bindir)"
 mkdir -p "$BINDIR"
-ln -sf "$INSTALL_DIR/xprint.py" "$BINDIR/xprint"
-ok "symlinked $BINDIR/xprint"
+run ln -sf "$INSTALL_DIR/xprint.py" "$BINDIR/xprint"
+ok "symlinked $BINDIR/xprint -> $INSTALL_DIR/xprint.py"
 
 # ---- final validation ------------------------------------------------------
-say "done"
+step "Done — final check"
 if have xprint; then
   ok "xprint on PATH: $(command -v xprint)"
 else
