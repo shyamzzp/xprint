@@ -13,6 +13,7 @@ Usage:
     echo "hi" | xprint -r -s 28 -f menlo   # raster, custom size/font
     xprint file.txt                        # print a file
     xprint --retract 3                     # reverse-feed 3 lines: pull paper back in
+    xprint -t                              # TELETYPE: prints each line live as it fills
     xprint                                 # INTERACTIVE: paste text, blank line prints
 """
 import sys
@@ -47,6 +48,7 @@ def parse_args(argv):
     each = False                             # each Enter prints its line immediately
     feed = 3                                 # blank lines fed after each print
     retract_n = 0                            # >0: reverse-feed N lines then exit
+    stream = False                           # teletype: auto-print each line as it fills
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -70,9 +72,11 @@ def parse_args(argv):
             feed = int(argv[i + 1]); i += 2
         elif a in ("--retract", "--reverse"):  # reverse-feed N lines, then exit
             retract_n = int(argv[i + 1]); i += 2
+        elif a in ("-t", "--stream", "--teletype"):  # live: print each line as it fills
+            stream = True; i += 1
         else:
             files.append(a); i += 1
-    return size, font, files, native, nfont, scale, header, each, feed, retract_n
+    return size, font, files, native, nfont, scale, header, each, feed, retract_n, stream
 
 
 def read_input(files):
@@ -311,14 +315,89 @@ def each_line(p, cfg):
         first[0] = False
 
 
+def stream_mode(p, cfg):
+    """Teletype: read keystrokes live and print each line the instant it fills
+    the paper width (word-wrapped so words are not split), then keep going for
+    the next line. Enter forces a line early; Ctrl-D / Ctrl-C flushes + exits.
+
+    Native ESC/POS text only (fixed-width, so we can count chars per line).
+    """
+    import termios, tty
+
+    if not sys.stdin.isatty():
+        die("stream mode needs an interactive terminal (don't pipe into -t)")
+
+    # chars per 58mm line for the built-in fonts, divided by the size multiplier
+    per_line = {"a": 32, "b": 42}.get(cfg["nfont"], 42)
+    width = max(1, per_line // max(1, cfg["scale"]))
+
+    # header once at the top, then lock in the body font
+    if cfg["header"]:
+        date_str, day_str = now_header()
+        gap = max(1, 42 - len(date_str) - len(day_str))
+        p.set(font="b", width=1, height=1, bold=False)
+        p.text(date_str + " " * gap + day_str + "\n\n")
+    p.set(font=cfg["nfont"], width=cfg["scale"], height=cfg["scale"], bold=False)
+
+    def emit(s):
+        p.text(s + "\n")                     # one paper line, no extra feed
+
+    print(f"xprint stream. Type away — each line prints at {width} chars "
+          f"(or on Enter). Ctrl-D to finish.\n")
+
+    fd = sys.stdin.fileno()
+    saved = termios.tcgetattr(fd)
+    line = ""
+    try:
+        tty.setcbreak(fd)                    # chars arrive without waiting for Enter
+        while True:
+            ch = sys.stdin.read(1)
+            if ch in ("", "\x04"):           # EOF / Ctrl-D
+                break
+            if ch == "\x03":                 # Ctrl-C
+                raise KeyboardInterrupt
+            if ch in ("\r", "\n"):           # Enter: print what we have now
+                sys.stdout.write("\r\n"); sys.stdout.flush()
+                emit(line); line = ""
+                continue
+            if ch in ("\x7f", "\b"):         # backspace
+                if line:
+                    line = line[:-1]
+                    sys.stdout.write("\b \b"); sys.stdout.flush()
+                continue
+            if ch < " ":                     # ignore other control chars
+                continue
+            line += ch
+            sys.stdout.write(ch); sys.stdout.flush()
+            if len(line) >= width:           # line full -> print it now
+                cut = line.rfind(" ")
+                if cut <= 0:                 # no space: hard-break the long word
+                    head, line = line, ""
+                else:                        # word-wrap: keep trailing word for next line
+                    head, line = line[:cut], line[cut + 1:]
+                emit(head)
+                sys.stdout.write("\r\n" + line); sys.stdout.flush()
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+    if line.strip():                         # flush the last partial line
+        emit(line)
+    p.text("\n" * cfg.get("feed", 3))        # feed so the last line clears the head
+    print()
+
+
 def main():
-    size, font, files, native, nfont, scale, header, each, feed, retract_n = parse_args(sys.argv[1:])
+    size, font, files, native, nfont, scale, header, each, feed, retract_n, stream = parse_args(sys.argv[1:])
     cfg = {"size": size, "font": font, "native": native,
            "nfont": nfont, "scale": scale, "header": header, "feed": feed}
     p = open_printer()
 
     if retract_n > 0:                      # undo a feed: pull paper back, then exit
         retract(p, retract_n)
+        return
+
+    if stream:                             # teletype: native only, prints as you type
+        cfg["native"] = True
+        stream_mode(p, cfg)
         return
 
     # Interactive when no files and stdin is a terminal; else one-shot.

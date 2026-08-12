@@ -58,12 +58,31 @@ echo "big" | xprint --nfont a        # native big built-in font
 echo "2x"  | xprint --scale 2        # native double size
 echo "hi"  | xprint --no-header      # skip the date/weekday header
 xprint --retract 3                   # reverse-feed 3 lines: pull paper back in (undo a feed)
+xprint -t                            # teletype: prints each line live as you fill the paper width
 
 # raster mode (custom fonts / sizes)
 echo "hi"  | xprint -r                       # Courier, size 24
 echo "hi"  | xprint -r -s 28 -f menlo        # Menlo bold, size 28
 echo "hi"  | xprint -r -f /path/to/font.ttf  # any TrueType/OTF
 ```
+
+### Teletype / stream mode (`-t`)
+
+```bash
+xprint -t
+```
+
+Prints **as you type**, one paper line at a time. The instant your typing fills a
+paper-width line (Font B ≈ 42 chars, Font A ≈ 32, divided by `--scale`), that line
+prints immediately and you keep typing into the next one, like an old teletype.
+
+- **Word-wrapped**: a line breaks at the last space, so words are never split.
+- **Enter** forces the current line to print early.
+- **Backspace** edits the not-yet-printed line.
+- The date/weekday header prints **once** at the top (unless `--no-header`).
+- **Ctrl-D** (or Ctrl-C) flushes the last partial line and exits.
+- Native font only (fixed-width is what lets us count chars per line). Combine with
+  `--nfont a`, `--scale N`, `--no-header`, `--feed N`.
 
 ### Interactive session
 
