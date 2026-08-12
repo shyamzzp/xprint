@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>xprint - 58mm Xprinter thermal CLI</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 46rem; margin: 3rem auto; padding: 0 1.2rem;
+  }
+  h1 { font-size: 2rem; margin: 0 0 .2rem; }
+  .sub { opacity: .7; margin: 0 0 2rem; }
+  pre {
+    background: #1113; padding: 1rem 1.1rem; border-radius: 8px;
+    overflow-x: auto; font-size: .95rem;
+  }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  a { color: inherit; }
+  .row { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 2rem; opacity: .8; }
+  h2 { font-size: 1.1rem; margin-top: 2.2rem; }
+</style>
+</head>
+<body>
+  <h1>xprint</h1>
+  <p class="sub">Print to a cheap 58mm Xprinter ESC/POS thermal printer from the terminal. macOS &amp; Linux.</p>
+
+  <h2>Install</h2>
+  <pre><code>curl -fsSL https://shyamzzp.github.io/xprint/install.sh | bash</code></pre>
+  <p>Installs prerequisites, validates, then sets up the <code>xprint</code> command. Idempotent, safe to re-run to update.</p>
+
+  <h2>Use</h2>
+  <pre><code>echo "hello world" | xprint     # print text
+xprint -t                       # teletype: prints each line as you type
+xprint --help                   # every command and flag</code></pre>
+
+  <div class="row">
+    <a href="https://github.com/shyamzzp/xprint">Source on GitHub</a>
+    <a href="https://github.com/shyamzzp/xprint#readme">Full README</a>
+  </div>
+</body>
+</html>
