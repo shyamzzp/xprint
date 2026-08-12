@@ -1,5 +1,11 @@
 # xprint
 
+**Install (macOS / Linux):**
+
+```bash
+curl -fsSL https://shyamzzp.github.io/xprint/install.sh | bash
+```
+
 Print text to a cheap **58mm Xprinter ESC/POS thermal printer** from macOS (or Linux) over USB, straight from the terminal.
 
 macOS has no working driver for these no-name thermal printers: raw CUPS queues were removed, only Generic PostScript/PCL PPDs ship (which the printer can't read), and there's no vendor PPD. So `xprint` talks to the printer **directly over USB** via [`python-escpos`](https://github.com/python-escpos/python-escpos) + `libusb`, no CUPS queue needed.
@@ -32,8 +38,7 @@ python3, libusb), validates them, clones the repo, builds a venv, and puts an
 safe to re-run to update.
 
 ```bash
-curl -fsSL -H "Accept: application/vnd.github.raw" \
-  https://api.github.com/repos/shyamzzp/xprint/contents/install.sh?ref=main | bash
+curl -fsSL https://shyamzzp.github.io/xprint/install.sh | bash
 ```
 
 Then smoke test:
@@ -46,10 +51,18 @@ echo "it works" | xprint
 - If you see `xprint: command not found`, the symlink dir isn't on your `PATH`; the installer prints the exact `export PATH=...` line to fix it.
 - Env overrides: `XPRINT_DIR` (install location, default `~/.local/share/xprint`), `XPRINT_BIN` (symlink dir).
 
-> The install command uses the GitHub **API** URL on purpose: it always serves
-> the current `install.sh`. The plain `raw.githubusercontent.com/.../install.sh`
-> URL also works but is CDN-cached for a few minutes after each push, so a fresh
-> change may not show up immediately.
+> The install URL is served by **GitHub Pages** (`username.github.io/repo/install.sh`),
+> easy to recall from the repo name and refreshed on every push. Two equivalents
+> if you ever need them:
+>
+> ```bash
+> # GitHub API (always current, no cache lag)
+> curl -fsSL -H "Accept: application/vnd.github.raw" \
+>   https://api.github.com/repos/shyamzzp/xprint/contents/install.sh?ref=main | bash
+>
+> # raw.githubusercontent (CDN-cached a few minutes after a push)
+> curl -fsSL https://raw.githubusercontent.com/shyamzzp/xprint/main/install.sh | bash
+> ```
 
 <details>
 <summary>Manual install (no installer script)</summary>
@@ -176,8 +189,7 @@ old code, so **restart `xprint`** afterwards to use the new version.
 Equivalent from the shell (re-runs the installer, also works to update):
 
 ```bash
-curl -fsSL -H "Accept: application/vnd.github.raw" \
-  https://api.github.com/repos/shyamzzp/xprint/contents/install.sh?ref=main | bash
+curl -fsSL https://shyamzzp.github.io/xprint/install.sh | bash
 ```
 
 Note: the checkout at `~/.local/share/xprint` is managed. `:update` (and the
