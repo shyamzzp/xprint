@@ -93,8 +93,12 @@ fi
 # ---- fetch / update repo ---------------------------------------------------
 step "Fetching xprint source"
 if [ -d "$INSTALL_DIR/.git" ]; then
-  say "existing checkout found — updating: $INSTALL_DIR"
-  run git -C "$INSTALL_DIR" pull --ff-only
+  say "existing checkout found — syncing to latest: $INSTALL_DIR"
+  # Managed checkout, not for hand edits. Force it to match origin/main so an
+  # older installer's local tweaks can't block the update with a merge abort.
+  run git -C "$INSTALL_DIR" fetch --depth 1 origin main
+  run git -C "$INSTALL_DIR" reset --hard origin/main
+  run git -C "$INSTALL_DIR" clean -fd
 else
   say "cloning $REPO"
   say "  -> $INSTALL_DIR"
@@ -114,17 +118,19 @@ run "$INSTALL_DIR/.venv/bin/python" -c 'import escpos, usb, PIL; print("escpos, 
   || die "python deps failed to import"
 ok "deps installed + import cleanly"
 
-# ---- pin shebang at the venv interpreter -----------------------------------
+# ---- build a launcher (keeps the checkout pristine) ------------------------
+# NOTE: do NOT edit xprint.py's shebang here. Mutating the tracked file dirties
+# the git checkout and makes the next run's update abort. Instead ship a tiny
+# wrapper that runs the script with the venv's Python.
 step "Wiring up the global command"
-say "pinning shebang to venv interpreter"
-python3 - "$INSTALL_DIR/xprint.py" "$INSTALL_DIR/.venv/bin/python3" <<'PY'
-import sys
-path, interp = sys.argv[1], sys.argv[2]
-lines = open(path).read().splitlines(keepends=True)
-lines[0] = f"#!{interp}\n"
-open(path, "w").writelines(lines)
-PY
-chmod +x "$INSTALL_DIR/xprint.py"
+LAUNCHER="$INSTALL_DIR/.bin/xprint"
+mkdir -p "$INSTALL_DIR/.bin"
+cat > "$LAUNCHER" <<EOF
+#!/usr/bin/env bash
+exec "$INSTALL_DIR/.venv/bin/python" "$INSTALL_DIR/xprint.py" "\$@"
+EOF
+chmod +x "$LAUNCHER"
+ok "launcher: $LAUNCHER"
 
 # ---- symlink onto PATH -----------------------------------------------------
 pick_bindir() {
@@ -136,8 +142,8 @@ pick_bindir() {
 }
 BINDIR="$(pick_bindir)"
 mkdir -p "$BINDIR"
-run ln -sf "$INSTALL_DIR/xprint.py" "$BINDIR/xprint"
-ok "symlinked $BINDIR/xprint -> $INSTALL_DIR/xprint.py"
+run ln -sf "$LAUNCHER" "$BINDIR/xprint"
+ok "symlinked $BINDIR/xprint -> $LAUNCHER"
 
 # ---- final validation ------------------------------------------------------
 step "Done — final check"
