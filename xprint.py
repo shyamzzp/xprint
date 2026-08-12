@@ -391,7 +391,7 @@ def stream_mode(p, cfg):
     def emit(s):
         p.text(s + "\n")                     # one paper line, no extra feed
 
-    print(f"xprint stream. Type away — each line prints at {width} chars "
+    print(f"xprint stream. Type away, each line prints at {width} chars "
           f"(or on Enter). Ctrl-D to finish.\n")
 
     fd = sys.stdin.fileno()
