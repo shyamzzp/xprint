@@ -261,7 +261,16 @@ Commands (start with ':'):
   :update / :upgrade update xprint to the latest version (git pull + deps)
   :status            show current settings
   :help              this help
-  :quit / Ctrl-D     exit"""
+  :quit / Ctrl-D     exit
+
+Line editing (also: arrow keys, and Up/Down for history):
+  Cmd+Delete / Ctrl-U      delete the whole line
+  Option+Delete / Ctrl-W   delete the previous word
+  Ctrl-A / Ctrl-E          jump to start / end of line
+  Option+Left / Right      move a word at a time
+  Ctrl-K                   delete from the cursor to the end of the line
+If Cmd+Delete or Option+Delete do nothing, the terminal is not sending them:
+iTerm2 -> Settings > Profiles > Keys > Presets > "Natural Text Editing"."""
 
 
 def status(cfg):
@@ -314,29 +323,143 @@ def do_command(line, cfg, p=None):
     return True
 
 
+# --- Line editing (interactive + each-line modes) ------------------------
+HISTFILE = os.path.expanduser("~/.xprint_history")
+
+# Emacs-style editing keys, written for both readline backends. macOS ships
+# libedit (different command names + "bind" syntax); most Linux builds and
+# python.org/Homebrew builds may use GNU readline.
+_GNU_BINDINGS = [
+    r'"\C-a": beginning-of-line',
+    r'"\C-e": end-of-line',
+    r'"\C-b": backward-char',
+    r'"\C-f": forward-char',
+    r'"\C-k": kill-line',
+    r'"\C-u": unix-line-discard',      # kill whole line left of cursor
+    r'"\C-w": unix-word-rubout',       # kill previous word
+    r'"\C-y": yank',
+    r'"\C-t": transpose-chars',
+    r'"\C-l": clear-screen',
+    r'"\e\177": backward-kill-word',   # option+delete
+    r'"\e\C-h": backward-kill-word',   # some terminals send this instead
+    r'"\eb": backward-word',           # option+left
+    r'"\ef": forward-word',            # option+right
+    r'"\ed": kill-word',               # option+fn+delete
+    r'"\e[1;3D": backward-word',
+    r'"\e[1;3C": forward-word',
+    r'"\e[1~": beginning-of-line',
+    r'"\e[4~": end-of-line',
+]
+_LIBEDIT_BINDINGS = [
+    "bind -e",                          # make sure we are in emacs mode
+    "bind ^A ed-move-to-beg",
+    "bind ^E ed-move-to-end",
+    "bind ^B ed-prev-char",
+    "bind ^F ed-next-char",
+    "bind ^K ed-kill-line",
+    "bind ^U vi-kill-line-prev",        # libedit's "kill whole line left"
+    "bind ^W ed-delete-prev-word",
+    "bind ^Y em-yank",
+    "bind ^T ed-transpose-chars",
+    "bind ^L ed-clear-screen",
+    r"bind '\e\177' ed-delete-prev-word",   # option+delete
+    r"bind '\e^H' ed-delete-prev-word",
+    r"bind '\eb' ed-prev-word",
+    r"bind '\ef' em-next-word",
+    r"bind '\ed' em-delete-next-word",
+    r"bind '\e[1;3D' ed-prev-word",
+    r"bind '\e[1;3C' em-next-word",
+    r"bind '\e[1~' ed-move-to-beg",
+    r"bind '\e[4~' ed-move-to-end",
+]
+
+
+def setup_readline():
+    """Give input() full terminal-style line editing + persistent history.
+
+    Cmd+Delete (kill whole line) and Option+Delete (kill previous word) are
+    only ever seen by us if the terminal emulator sends the control bytes for
+    them: 0x15 for Cmd+Delete, ESC DEL for Option+Delete. iTerm2's
+    Settings > Profiles > Keys > "Natural Text Editing" preset does both.
+    For Terminal.app, set Option as Meta (Settings > Profiles > Keyboard >
+    "Use Option as Meta key") for Option+Delete, and add a Cmd+Backspace
+    keyboard shortcut sending hex 0x15 for Cmd+Delete.
+    """
+    try:
+        import readline
+    except ImportError:                  # no line editing available; still usable
+        return None
+
+    libedit = "libedit" in (readline.__doc__ or "")
+    for b in (_LIBEDIT_BINDINGS if libedit else _GNU_BINDINGS):
+        try:
+            readline.parse_and_bind(b)
+        except Exception:
+            pass                         # unknown command name on this build
+
+    try:
+        readline.read_history_file(HISTFILE)
+    except (OSError, ValueError):
+        pass
+    try:
+        readline.set_history_length(1000)
+    except Exception:
+        pass
+    try:                                 # we add lines ourselves (see remember)
+        readline.set_auto_history(False)
+        readline._xprint_manual = True
+    except Exception:
+        readline._xprint_manual = False  # old build: leave history on automatic
+    return readline
+
+
+def save_history(rl):
+    if rl is None:
+        return
+    try:
+        rl.write_history_file(HISTFILE)
+    except OSError:
+        pass
+
+
+def remember(rl, line):
+    """Record a line in the history. Blank lines mean 'print now', not text."""
+    if rl is None or not getattr(rl, "_xprint_manual", False) or not line.strip():
+        return
+    try:
+        rl.add_history(line)
+    except Exception:
+        pass
+
+
 def interactive(p, cfg):
+    rl = setup_readline()
     print("xprint interactive. :help for commands, blank line prints, Ctrl-D quits.")
     print(status(cfg))
     buf = []
     first = [True]                          # header only on the session's first print
-    while True:
-        try:
-            line = input("… " if buf else "xprint> ")
-        except EOFError:
-            print()
-            break
-        if line.startswith(":"):
-            if not do_command(line, cfg, p):
+    try:
+        while True:
+            try:
+                line = input("… " if buf else "xprint> ")
+            except EOFError:
+                print()
                 break
-            continue
-        if line == "":                      # blank line = print buffer
-            if buf:
-                do_print(p, "\n".join(buf), cfg, show_header=first[0])
-                first[0] = False            # date/day printed once per session
-                print(f"printed {len(buf)} line(s) {status(cfg)}")
-                buf = []
-            continue
-        buf.append(line)
+            remember(rl, line)
+            if line.startswith(":"):
+                if not do_command(line, cfg, p):
+                    break
+                continue
+            if line == "":                  # blank line = print buffer
+                if buf:
+                    do_print(p, "\n".join(buf), cfg, show_header=first[0])
+                    first[0] = False        # date/day printed once per session
+                    print(f"printed {len(buf)} line(s) {status(cfg)}")
+                    buf = []
+                continue
+            buf.append(line)
+    finally:
+        save_history(rl)
     if buf:                                 # flush on exit
         do_print(p, "\n".join(buf), cfg, show_header=first[0])
         print(f"printed {len(buf)} line(s)")
@@ -344,24 +467,29 @@ def interactive(p, cfg):
 
 def each_line(p, cfg):
     """Line-at-a-time: every Enter prints that line immediately."""
+    rl = setup_readline()
     print("xprint each-line. Type text, Enter prints it. :help for commands, Ctrl-D quits.")
     print(status(cfg))
     first = [True]                          # header only on the session's first print
-    while True:
-        try:
-            line = input("xprint> ")
-        except EOFError:
-            print()
-            break
-        if line.startswith(":"):
-            if not do_command(line, cfg, p):
+    try:
+        while True:
+            try:
+                line = input("xprint> ")
+            except EOFError:
+                print()
                 break
-            continue
-        if line == "":                      # blank Enter = paper feed only
-            p.text("\n")
-            continue
-        do_print(p, line, cfg, show_header=first[0])
-        first[0] = False
+            remember(rl, line)
+            if line.startswith(":"):
+                if not do_command(line, cfg, p):
+                    break
+                continue
+            if line == "":                  # blank Enter = paper feed only
+                p.text("\n")
+                continue
+            do_print(p, line, cfg, show_header=first[0])
+            first[0] = False
+    finally:
+        save_history(rl)
 
 
 def stream_mode(p, cfg):
@@ -371,7 +499,7 @@ def stream_mode(p, cfg):
 
     Native ESC/POS text only (fixed-width, so we can count chars per line).
     """
-    import termios, tty
+    import termios, tty, select
 
     if not sys.stdin.isatty():
         die("stream mode needs an interactive terminal (don't pipe into -t)")
@@ -392,11 +520,50 @@ def stream_mode(p, cfg):
         p.text(s + "\n")                     # one paper line, no extra feed
 
     print(f"xprint stream. Type away, each line prints at {width} chars "
-          f"(or on Enter). Ctrl-D to finish.\n")
+          f"(or on Enter). Ctrl-D to finish.")
+    print("editing: Ctrl-W / Option+Delete = delete word, "
+          "Ctrl-U / Cmd+Delete = delete line.\n")
 
     fd = sys.stdin.fileno()
     saved = termios.tcgetattr(fd)
     line = ""
+
+    def rubout(n):
+        """Erase the last n characters from the screen and the pending line."""
+        nonlocal line
+        n = min(n, len(line))
+        if n:
+            line = line[:-n]
+            sys.stdout.write("\b \b" * n); sys.stdout.flush()
+
+    def prev_word_len():
+        """Chars back to the start of the previous word (skips trailing spaces)."""
+        i = len(line)
+        while i > 0 and line[i - 1].isspace():
+            i -= 1
+        while i > 0 and not line[i - 1].isspace():
+            i -= 1
+        return len(line) - i
+
+    def pending():
+        """True if another byte is already waiting (i.e. part of an escape seq)."""
+        return bool(select.select([fd], [], [], 0.05)[0])
+
+    def after_escape():
+        """Handle an Esc-prefixed key. Returns a char still to be typed, or None."""
+        if not pending():                    # bare Esc: nothing to do here
+            return None
+        nxt = sys.stdin.read(1)
+        if nxt in ("\x7f", "\b", "d"):       # Option+Delete / Option+d
+            rubout(prev_word_len())
+            return None
+        if nxt == "[":                       # CSI: cursor keys and friends are
+            while pending():                 # meaningless in an append-only
+                if sys.stdin.read(1).isalpha():   # teletype, so swallow them
+                    break
+            return None
+        return nxt                           # not a sequence we know: plain char
+
     try:
         tty.setcbreak(fd)                    # chars arrive without waiting for Enter
         while True:
@@ -410,11 +577,19 @@ def stream_mode(p, cfg):
                 emit(line); line = ""
                 continue
             if ch in ("\x7f", "\b"):         # backspace
-                if line:
-                    line = line[:-1]
-                    sys.stdout.write("\b \b"); sys.stdout.flush()
+                rubout(1)
                 continue
-            if ch < " ":                     # ignore other control chars
+            if ch == "\x17":                 # Ctrl-W: delete previous word
+                rubout(prev_word_len())
+                continue
+            if ch == "\x15":                  # Ctrl-U / Cmd+Delete: kill whole line
+                rubout(len(line))
+                continue
+            if ch == "\x1b":                 # Esc-prefixed key (Option+..., arrows)
+                ch = after_escape()
+                if ch is None:
+                    continue
+            if ch < " " or ch == "\x7f":      # ignore other control chars
                 continue
             line += ch
             sys.stdout.write(ch); sys.stdout.flush()

@@ -16,7 +16,7 @@ macOS has no working driver for these no-name thermal printers: raw CUPS queues 
   - **Native** (default): the printer's built-in font. Dark, uniform, fast. Font is fixed (built-in A/B, integer scaling only).
   - **Raster** (`-r`): text rendered to a bitmap with any TrueType font at any size. More flexible, lighter/softer than native.
 - **Date + weekday header** on each print: date left (`10th Aug, 2026`), weekday right (`Monday`), in a smaller font.
-- **Interactive session**: run `xprint` with no args, paste text, blank line prints. Header prints once at the top of the session.
+- **Interactive session**: run `xprint` with no args, paste text, blank line prints. Header prints once at the top of the session. Full line editing and history at the prompt (see [Line editing and history](#line-editing-and-history)).
 - **Teletype / stream** (`-t`): prints each line live the moment your typing fills the paper width, word-wrapped, like an old teletype.
 - **Each-line** (`-e`): every Enter prints that one line immediately.
 - **Reverse feed** (`--retract N`): try to pull paper back into the printer (hardware permitting).
@@ -178,6 +178,42 @@ Live commands (type at the prompt):
 | `:status`        | show current settings                             |
 | `:help`          | command list                                      |
 | `:quit`          | exit (Ctrl-D also works)                          |
+
+### Line editing and history
+
+The prompt has full terminal-style line editing, plus a history of everything you
+typed (kept in `~/.xprint_history`, up to 1000 lines). Blank lines, which are the
+"print now" key, are not recorded.
+
+| Key                       | Effect                                    |
+|---------------------------|-------------------------------------------|
+| `Cmd+Delete` / `Ctrl-U`   | delete the whole line                     |
+| `Option+Delete` / `Ctrl-W`| delete the previous word                  |
+| `Ctrl-A` / `Ctrl-E`       | jump to start / end of line               |
+| `Option+Left` / `Right`   | move one word at a time                   |
+| `Left` / `Right`          | move one character                        |
+| `Ctrl-K`                  | delete from the cursor to end of line      |
+| `Ctrl-Y`                  | paste back what you just deleted          |
+| `Up` / `Down`             | previous / next line from history         |
+| `Ctrl-L`                  | clear the screen                          |
+
+The same keys work in `-t` (teletype) mode, where text is already committed to
+paper as you type, so only `Ctrl-W` / `Option+Delete` (word) and `Ctrl-U` /
+`Cmd+Delete` (line) apply to the part not yet printed.
+
+**If `Cmd+Delete` or `Option+Delete` do nothing**, your terminal is not sending
+them: macOS terminals swallow both by default. xprint reads `0x15` for
+`Cmd+Delete` and `Esc DEL` for `Option+Delete`.
+
+- **iTerm2**: Settings > Profiles > Keys > Presets > **Natural Text Editing**.
+  That maps both (and the Option+arrow word jumps) in one click.
+- **Terminal.app**: Settings > Profiles > Keyboard > tick **Use Option as Meta
+  key** for `Option+Delete`. For `Cmd+Delete`, add a key mapping sending the
+  escape sequence `\025` (hex `0x15`).
+- **VS Code / Ghostty / WezTerm**: bind `cmd+backspace` to send `\u0015` and
+  `alt+backspace` to send `\u001b\u007f`.
+
+`Ctrl-U` and `Ctrl-W` always work, on any terminal, with no configuration.
 
 ## Updating
 
