@@ -13,6 +13,8 @@ Usage:
     echo "hi" | xprint -r -s 28 -f menlo   # raster, custom size/font
     xprint file.txt                        # print a file
     xprint --retract 3                     # reverse-feed 3 lines: pull paper back in
+    xprint -e                              # EACH-LINE: Enter prints, typewriter font
+    xprint -e -n                           # each-line, printer's built-in font instead
     xprint -t                              # TELETYPE: prints each line live as it fills
     xprint                                 # INTERACTIVE: paste text, blank line prints
 """
@@ -35,11 +37,14 @@ DEFAULT_SIZE = 24
 FONTS = {                          # "path" or "path#faceindex" (for .ttc bold faces)
     "menlo":      "/System/Library/Fonts/Menlo.ttc#1",   # Bold
     "typewriter": "/System/Library/Fonts/Supplemental/AmericanTypewriter.ttc",
+    "typewriter-bold":"/System/Library/Fonts/Supplemental/AmericanTypewriter.ttc#2",
     "courier":    "/System/Library/Fonts/Supplemental/Courier New Bold.ttf",
     "courier-reg":"/System/Library/Fonts/Supplemental/Courier New.ttf",
     "monaco":     "/System/Library/Fonts/Monaco.ttf",
 }
 DEFAULT_FONT = "courier"
+EACH_FONT = "typewriter"           # -e / --each defaults to the typewriter face
+EACH_SIZE = 24
 LINE_SPACING = 1.0                # vertical gap between lines
 
 
@@ -51,17 +56,18 @@ def parse_args(argv):
     feed = 3                                 # blank lines fed after each print
     retract_n = 0                            # >0: reverse-feed N lines then exit
     stream = False                           # teletype: auto-print each line as it fills
+    explicit = set()                         # knobs the user set on the command line
     i = 0
     while i < len(argv):
         a = argv[i]
         if a in ("-s", "--size"):
-            size = int(argv[i + 1]); i += 2
+            size = int(argv[i + 1]); explicit.add("size"); i += 2
         elif a in ("-f", "--font"):
-            font = argv[i + 1]; i += 2
+            font = argv[i + 1]; explicit.add("font"); i += 2
         elif a in ("-r", "--raster"):        # switch to custom-font bitmap mode
-            native = False; i += 1
+            native = False; explicit.add("mode"); i += 1
         elif a in ("-n", "--native"):
-            native = True; i += 1
+            native = True; explicit.add("mode"); i += 1
         elif a == "--nfont":                 # native built-in font: a (big) or b (small)
             nfont = argv[i + 1]; i += 2
         elif a == "--scale":                 # native size multiplier 1..8
@@ -78,7 +84,8 @@ def parse_args(argv):
             stream = True; i += 1
         else:
             files.append(a); i += 1
-    return size, font, files, native, nfont, scale, header, each, feed, retract_n, stream
+    return (size, font, files, native, nfont, scale, header, each, feed,
+            retract_n, stream, explicit)
 
 
 def read_input(files):
@@ -253,7 +260,7 @@ Commands (start with ':'):
   :raster            custom-font bitmap mode (any font/size, lighter)
   :nfont a|b         native font: a=big, b=small
   :scale N           native size multiplier 1..8
-  :font NAME         raster font (courier/typewriter/menlo/monaco/path)
+  :font NAME         raster font (courier/typewriter/typewriter-bold/menlo/monaco/path)
   :size N            raster point size
   :header on|off     date + weekday line at top (default on)
   :feed N            blank lines fed after each print (default 3)
@@ -615,7 +622,19 @@ def main():
         print(HELP)
         return
 
-    size, font, files, native, nfont, scale, header, each, feed, retract_n, stream = parse_args(sys.argv[1:])
+    (size, font, files, native, nfont, scale, header, each, feed,
+     retract_n, stream, explicit) = parse_args(sys.argv[1:])
+
+    # -e is the "write a note" mode, so it defaults to the typewriter face
+    # instead of the printer's built-in font. -n / -r / -f / -s still win.
+    if each:
+        if "mode" not in explicit:
+            native = False
+        if "font" not in explicit:
+            font = EACH_FONT
+        if "size" not in explicit:
+            size = EACH_SIZE
+
     cfg = {"size": size, "font": font, "native": native,
            "nfont": nfont, "scale": scale, "header": header, "feed": feed}
     p = open_printer()

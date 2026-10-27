@@ -18,7 +18,7 @@ macOS has no working driver for these no-name thermal printers: raw CUPS queues 
 - **Date + weekday header** on each print: date left (`10th Aug, 2026`), weekday right (`Monday`), in a smaller font.
 - **Interactive session**: run `xprint` with no args, paste text, blank line prints. Header prints once at the top of the session. Full line editing and history at the prompt (see [Line editing and history](#line-editing-and-history)).
 - **Teletype / stream** (`-t`): prints each line live the moment your typing fills the paper width, word-wrapped, like an old teletype.
-- **Each-line** (`-e`): every Enter prints that one line immediately.
+- **Each-line** (`-e`): every Enter prints that one line immediately, in the American Typewriter face (raster mode) unless you override it.
 - **Reverse feed** (`--retract N`): try to pull paper back into the printer (hardware permitting).
 - **Auto-wrap** of long lines, descender-safe line height, and a chunked USB writer that works around this clone's tiny buffer (single big write → USB pipe error; multiple raster commands → gibberish).
 
@@ -92,7 +92,7 @@ ln -sf "$(pwd)/xprint.py" /opt/homebrew/bin/xprint   # or any dir on PATH
 | `echo "text" \| xprint` | Print piped text (one-shot). |
 | `xprint file.txt` | Print a file. |
 | `xprint` | Interactive: paste/type, a blank-line Enter prints the buffer. |
-| `xprint -e` | Each-line: every Enter prints that line immediately. |
+| `xprint -e` | Each-line: every Enter prints that line immediately, typewriter font. |
 | `xprint -t` | Teletype: prints each line live as your typing fills the paper width. |
 | `xprint --retract N` | Reverse-feed N lines, then exit (pull paper back in). |
 
@@ -104,13 +104,13 @@ ln -sf "$(pwd)/xprint.py" /opt/homebrew/bin/xprint   # or any dir on PATH
 | `--nfont a` | Native big built-in font (~32 chars/line). |
 | `--scale N` | Native size multiplier, 1–8. |
 | `-r`, `--raster` | Raster mode: bitmap render with any TrueType font. |
-| `-f NAME`, `--font NAME` | Raster font: preset (`courier`/`courier-reg`/`menlo`/`monaco`/`typewriter`) or a `.ttf`/`.otf` path. |
+| `-f NAME`, `--font NAME` | Raster font: preset (`courier`/`courier-reg`/`menlo`/`monaco`/`typewriter`/`typewriter-bold`) or a `.ttf`/`.otf` path. |
 | `-s N`, `--size N` | Raster point size (default 24). |
 | `-n`, `--native` | Force native mode (default). |
 | `--no-header` | Skip the date + weekday header. |
 | `--feed N` | Blank lines fed after each print (default 3). |
 | `--retract N`, `--reverse N` | Reverse-feed N lines (most clones ignore it; no reverse motor). |
-| `-e`, `--each` | Each-line mode (Enter prints the line). |
+| `-e`, `--each` | Each-line mode (Enter prints the line). Defaults to raster `typewriter` at size 24; `-n`, `-r`, `-f` and `-s` override it. |
 | `-t`, `--stream`, `--teletype` | Teletype mode. |
 | `-h`, `--help` | Print usage + all commands, then exit. |
 
@@ -169,7 +169,7 @@ Live commands (type at the prompt):
 | `:raster`        | custom-font bitmap mode                           |
 | `:nfont a|b`     | native font: `a` = big, `b` = small               |
 | `:scale N`       | native size multiplier (1–8)                      |
-| `:font NAME`     | raster font (`courier`/`typewriter`/`menlo`/`monaco`/path) |
+| `:font NAME`     | raster font (`courier`/`typewriter`/`typewriter-bold`/`menlo`/`monaco`/path) |
 | `:size N`        | raster point size                                 |
 | `:header on|off` | toggle the date/weekday header                    |
 | `:feed N`        | blank lines fed after each print                  |
